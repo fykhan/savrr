@@ -1,0 +1,26 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# supabase cli state
+supabase/.temp
+supabase/.branches
+
+# python (sub-project 2)
+__pycache__/
+*.pyc
+.venv/
+env/
+.pytest_cache/
+
+# node / react native (sub-projects 3-4)
+node_modules/
+.expo/
+dist/
+build/
+
+# editors / os
+.vscode/
+.idea/
+.DS_Store
