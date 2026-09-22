@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWKClient
+from starlette.concurrency import run_in_threadpool
 
 load_dotenv()
 
@@ -30,6 +31,6 @@ async def get_current_user(
     if credentials is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing bearer token")
     try:
-        return verify_jwt(credentials.credentials)
+        return await run_in_threadpool(verify_jwt, credentials.credentials)
     except jwt.PyJWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid or expired token")
