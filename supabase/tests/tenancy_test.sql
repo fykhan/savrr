@@ -1,14 +1,17 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(32);
+select plan(34);
 
--- two users. profiles are inserted manually here; task 6 replaces this with the trigger.
+-- two users
 insert into auth.users (id, email, aud, role, raw_app_meta_data, raw_user_meta_data) values
   ('00000000-0000-0000-0000-00000000000a', 'a@test.local', 'authenticated', 'authenticated', '{}', '{}'),
   ('00000000-0000-0000-0000-00000000000b', 'b@test.local', 'authenticated', 'authenticated', '{}', '{}');
-insert into profiles (id) values
-  ('00000000-0000-0000-0000-00000000000a'), ('00000000-0000-0000-0000-00000000000b')
-on conflict (id) do nothing;
+
+-- profiles are created by the on_auth_user_created trigger, not inserted here
+select is(count(*)::int, 2, 'signup trigger created a profile for each user') from profiles
+  where id in ('00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-00000000000b');
+select is(currency, 'USD', 'new profile defaults to USD') from profiles
+  where id = '00000000-0000-0000-0000-00000000000a';
 
 -- one row of everything for each user
 insert into accounts (id, user_id, name, type) values
