@@ -18,10 +18,10 @@ speech.
 Target architecture: **Supabase** (Postgres + Auth) → **FastAPI** backend with AI via **OpenRouter**
 → **React Native** client (iOS-primary, Android optional).
 
-## Status as of 2026-09-21
+## Status as of 2026-09-22
 
-**Pre-implementation.** The repo contains documentation and the Supabase CLI scaffold — no schema,
-no backend, no app yet. The design for the first sub-project is approved; planning is next.
+**Sub-project 1 shipped.** Schema, RLS, signup trigger and seed categories are live on
+`savrr-dev`. Sub-project 2 (FastAPI backend) has not started.
 
 ## How the work is decomposed
 
@@ -94,17 +94,27 @@ Pydantic, and the legacy `goals` table name for savings.
 - Secrets live in a gitignored `.env`. Never commit or paste the database password, `service_role`
   key, or `anon` key.
 
-## Planned layout
+## Layout
 
 ```
 supabase/
   config.toml
-  migrations/        0001_enums → 0005_seed_categories
-  tests/             pgTAP: tenancy, cascades, constraints
-docs/superpowers/specs/
+  migrations/   0001_enums · 0002_tables · 0003_rls · 0004_new_user_trigger · 0005_seed_categories
+  tests/        tenancy_test.sql · cascades_test.sql · constraints_test.sql
+scripts/pgtap.py            test runner (see "Status of setup" above)
+docs/superpowers/specs/     design specs
+docs/superpowers/plans/     implementation plans
 ```
 
-## Status of setup (2026-09-21)
+Migrations are forward-only: once pushed, never edit one — add `0006_…`. Tests run against the
+hosted dev DB inside `begin … rollback`, so they leave nothing behind. To exercise RLS in a test,
+`set local role authenticated` after setting `request.jwt.claims` — the `postgres` role bypasses RLS.
+
+## Status of setup (2026-09-22)
+
+**Sub-project 1 (data layer) is implemented and applied to `savrr-dev`.** Five migrations in
+`supabase/migrations/`, three pgTAP files in `supabase/tests/`, all passing. Next: sub-project 2
+(FastAPI backend) — brainstorm → spec → plan.
 
 - Supabase CLI installed at `~/.supabase/bin/supabase` (via the official install script — the npm
   global package is deprecated and doesn't produce a working binary). `~/.bashrc` adds it to PATH;
@@ -113,9 +123,24 @@ docs/superpowers/specs/
   (ref `myafgbejcqvitbosfcag`, us-west-2, Postgres 17). The link lives in `supabase/.temp/`
   (gitignored) — if `supabase db push` complains about no project ref, re-run
   `supabase link --project-ref myafgbejcqvitbosfcag`.
-- `.env.example` lists the keys to fill into `.env`; nothing needs them until sub-project 2.
-- The data-layer spec was **approved by the author on 2026-09-21**. Next step: turn it into an
-  implementation plan (writing-plans skill), then implement.
+- `.env` has `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_PASSWORD`
+  (gitignored, never commit). **The DB password can contain shell-special characters (seen: `$`) —
+  single-quote its value in `.env`**, or `source .env` will mangle it and every `supabase db push` /
+  test run will fail with a Postgres auth error that looks like a wrong password.
+- **`supabase test db --linked` does not work here** — it runs `pg_prove` inside Docker, and Docker
+  isn't reachable from this WSL distro (no `docker` on PATH, and Docker Desktop's WSL integration
+  isn't enabled for this distro). Tests instead run via `.venv/bin/python scripts/pgtap.py`, a small
+  runner (`psycopg`, installed in a `.venv/` at the repo root) that executes each
+  `supabase/tests/*_test.sql` file directly against the linked `savrr-dev` project. Same test files,
+  same `begin … rollback` semantics — just no container in the loop. Two ways to get the real
+  `supabase test db` working instead, if ever wanted: enable Docker Desktop's WSL integration for
+  this distro, or `apt install postgresql-client libtap-parser-sourcehandler-pgtap-perl` and use
+  `pg_prove` directly.
+- The public `/auth/v1/signup` endpoint sends a confirmation email and is rate-limited very low on
+  Supabase's default SMTP (hit `over_email_send_rate_limit` after one real attempt). For scripted
+  user creation/deletion — e.g. an end-to-end sanity check — use the admin API instead
+  (`POST /auth/v1/admin/users` with `service_role` and `"email_confirm": true`, `DELETE
+  /auth/v1/admin/users/<id>`), which doesn't send email or hit that limit.
 
 ## Environment notes
 
