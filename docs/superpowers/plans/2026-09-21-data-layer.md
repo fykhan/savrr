@@ -209,7 +209,7 @@ Replace the whole of `supabase/tests/constraints_test.sql` with:
 ```sql
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(25);
+select plan(26);
 
 -- enums (task 2)
 select enum_has_labels('public', 'frequency',
@@ -228,8 +228,8 @@ from unnest(array['profiles','accounts','transactions','income','expenses','subs
                   'installments','savings','budgets','debts','categories']) as t;
 
 -- money is numeric(14,2), not float (spec: departure 1)
-select col_type_is('public', 'accounts',     'balance', 'numeric(14,2)');
-select col_type_is('public', 'transactions', 'amount',  'numeric(14,2)');
+select col_type_is('public', 'accounts',     'balance', 'numeric(14,2)', 'accounts.balance is numeric(14,2)');
+select col_type_is('public', 'transactions', 'amount',  'numeric(14,2)', 'transactions.amount is numeric(14,2)');
 
 -- the database refuses bad data (spec: testing group 3)
 -- a test user so the FK to auth.users is satisfied
@@ -266,7 +266,7 @@ select * from finish();
 rollback;
 ```
 
-Assertion count: 8 enums + 11 tables + 2 col types + 3 constraint + 1 lives_ok = 25.
+Assertion count: 8 enums + 11 tables + 2 col types + 4 throws_ok + 1 lives_ok = 26.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -855,7 +855,7 @@ select ok(exists (select 1 from categories where user_id is null and kind = 'tra
   'transaction categories include Adjustment');
 ```
 
-and change `select plan(25);` to `select plan(30);`.
+and change `select plan(26);` to `select plan(30);`.
 
 - [ ] **Step 2: Run test to verify it fails**
 

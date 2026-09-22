@@ -32,9 +32,11 @@ def statements(sql: str):
             in_dollar = not in_dollar
         buf.append(line)
         if not in_dollar and line.rstrip().endswith(";"):
-            stmt = "\n".join(buf).strip()
+            # drop leading comment-only lines so a commented statement still runs
+            body = [l for l in buf if not l.strip().startswith("--") or in_dollar]
+            stmt = "\n".join(body).strip()
             buf = []
-            if stmt and not stmt.startswith("--"):
+            if stmt:
                 yield stmt
     if "".join(buf).strip():
         yield "\n".join(buf)
@@ -60,7 +62,7 @@ def run_file(path: Path) -> bool:
                     if line is None:
                         continue
                     print(line)
-                    if re.match(r"^not ok\b", line) or line.startswith("# Looks like you failed"):
+                    if re.match(r"^not ok\b", line) or line.startswith("# Looks like you"):
                         failed += 1
     return failed == 0
 
