@@ -1,10 +1,12 @@
+from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
 from fastapi import HTTPException
-from pydantic import BaseModel, ConfigDict, ValidationError, create_model
+from fastapi.encoders import jsonable_encoder
+from pydantic import BaseModel, ConfigDict, ValidationError, create_model, model_validator
 from pydantic.alias_generators import to_camel
 
 
@@ -24,7 +26,12 @@ def validate_body(schema: type[CamelModel], body: dict):
     try:
         return schema.model_validate(body)
     except ValidationError as e:
-        raise HTTPException(status_code=422, detail=e.errors())
+        # jsonable_encoder, not e.errors() directly: a model_validator that
+        # raises a plain ValueError (e.g. TransactionIn's cross-field check)
+        # ends up with the raw exception object under errors()[i]["ctx"]["error"],
+        # which json.dumps chokes on -- this is what FastAPI's own default
+        # RequestValidationError handler does to avoid the same crash.
+        raise HTTPException(status_code=422, detail=jsonable_encoder(e.errors()))
 
 
 class ProfileOut(CamelModel):
@@ -125,3 +132,58 @@ def _build_schemas(name: str, fields: dict[str, tuple[type, object]]):
 SCHEMAS: dict[str, tuple[type[CamelModel], type[CamelModel], type[CamelModel]]] = {
     name: _build_schemas(name, fields) for name, fields in COLLECTION_FIELDS.items()
 }
+
+
+TxnType = Literal["expense", "income", "transfer", "debt", "savings"]
+DebtTxnDir = Literal["increase", "decrease"]
+SavingTxnDir = Literal["contribute", "withdraw"]
+
+
+class TransactionIn(CamelModel):
+    date: date_type
+    description: str
+    amount: Decimal
+    type: TxnType
+    category: str = "Other"
+    account_id: UUID | None = None
+    to_account_id: UUID | None = None
+    debt_id: UUID | None = None
+    debt_direction: DebtTxnDir | None = None
+    saving_id: UUID | None = None
+    saving_direction: SavingTxnDir | None = None
+    notes: str = ""
+
+    @model_validator(mode="after")
+    def _check_type_fields(self) -> "TransactionIn":
+        if self.type == "transfer" and (self.account_id is None or self.to_account_id is None):
+            raise ValueError("transfer requires accountId and toAccountId")
+        if self.type == "debt" and (self.debt_id is None or self.debt_direction is None):
+            raise ValueError("debt requires debtId and debtDirection")
+        if self.type == "savings" and (self.saving_id is None or self.saving_direction is None):
+            raise ValueError("savings requires savingId and savingDirection")
+        return self
+
+
+class TransactionOut(CamelModel):
+    id: UUID
+    date: date_type
+    description: str
+    amount: Decimal
+    type: TxnType
+    category: str
+    account_id: UUID | None
+    to_account_id: UUID | None
+    debt_id: UUID | None
+    debt_direction: DebtTxnDir | None
+    saving_id: UUID | None
+    saving_direction: SavingTxnDir | None
+    notes: str
+    created_at: datetime
+
+
+class TransactionPatch(CamelModel):
+    date: date_type | None = None
+    description: str | None = None
+    amount: Decimal | None = None
+    category: str | None = None
+    notes: str | None = None

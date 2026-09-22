@@ -2,11 +2,12 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 
-from backend.routes import collections, profiles
+from backend.routes import collections, profiles, transactions
 
 app = FastAPI(title="savrr")
 
 app.include_router(profiles.router)
+app.include_router(transactions.router)
 
 
 # Registered before collections.router (see note below): collections.router's
