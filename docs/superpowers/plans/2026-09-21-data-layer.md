@@ -846,8 +846,9 @@ Category lists are ported verbatim from `financial-manager/public/js/forms.js:11
 In `supabase/tests/constraints_test.sql`, add before `select * from finish();`:
 
 ```sql
--- seeded system categories (task 7)
-select is(count(*)::int, 11, '11 system expense categories')     from categories where user_id is null and kind = 'expense';
+-- seeded system categories (task 7). expense count is 12, not 11: this file's
+-- own earlier fixture already inserted one system 'Dup' expense category.
+select is(count(*)::int, 12, '11 system expense categories + Dup') from categories where user_id is null and kind = 'expense';
 select is(count(*)::int, 11, '11 system budget categories')      from categories where user_id is null and kind = 'budget';
 select is(count(*)::int, 15, '15 system transaction categories') from categories where user_id is null and kind = 'transaction';
 select is(count(*)::int, 7,  '7 system subscription categories') from categories where user_id is null and kind = 'subscription';
@@ -855,7 +856,13 @@ select ok(exists (select 1 from categories where user_id is null and kind = 'tra
   'transaction categories include Adjustment');
 ```
 
-and change `select plan(26);` to `select plan(30);`.
+and change `select plan(26);` to `select plan(31);`.
+
+Real seed data also breaks two exact-count assertions in `tenancy_test.sql` that were written before
+seed data existed (`A sees system + own categories` and `anon sees system categories only` — both
+assumed the only system category was the fixture's `SysCat`). Narrow both to count only the
+fixture's marker categories (`name in ('SysCat', 'A cat', 'B cat')`), and rename the anon assertion
+to `'anon sees SysCat but not user categories'`.
 
 - [ ] **Step 2: Run test to verify it fails**
 
