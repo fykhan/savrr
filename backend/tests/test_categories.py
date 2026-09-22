@@ -29,3 +29,24 @@ async def test_can_delete_own_category(auth_client):
     category_id = created.json()["id"]
     resp = await auth_client.delete(f"/categories/{category_id}")
     assert resp.status_code == 204
+
+
+async def test_cannot_see_or_delete_another_users_category(make_auth_client):
+    _, client_a = await make_auth_client()
+    _, client_b = await make_auth_client()
+
+    created = await client_a.post("/categories", json={"kind": "expense", "name": "A's Category"})
+    category_id = created.json()["id"]
+
+    # B's list never contains A's custom category
+    listed_b = await client_b.get("/categories")
+    assert all(c["id"] != category_id for c in listed_b.json())
+
+    # B can't delete A's row by id -- RLS makes it invisible, same as the
+    # system-category case: looks like "doesn't exist", not "forbidden"
+    resp = await client_b.delete(f"/categories/{category_id}")
+    assert resp.status_code == 404
+
+    # A's category is untouched
+    listed_a = await client_a.get("/categories")
+    assert any(c["id"] == category_id for c in listed_a.json())
