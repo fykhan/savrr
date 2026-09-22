@@ -39,7 +39,7 @@ posted date on start_date via add_months(start, n), same principle.
 
 from datetime import date
 
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -50,6 +50,17 @@ MAX_CATCHUP_PERIODS = 24  # safety cap per record, in case a date is very stale
 
 
 async def apply_due_transactions(conn: AsyncConnection, user_id: str) -> int:
+    # Per-user advisory lock, held for the rest of this transaction. Without
+    # it, two concurrent /sync calls for the same user can both read a
+    # record's next_date/next_due_date under READ COMMITTED before either
+    # commits its update, and both post the same due occurrence -- a genuine
+    # double-post. pg_advisory_xact_lock blocks the second caller here until
+    # the first commits or rolls back, then releases automatically (no
+    # manual unlock), so this composes with the per-request transaction from
+    # get_db_conn. hashtext(user_id) keys the lock per user, so different
+    # users' /sync calls never block each other.
+    await conn.execute(text("select pg_advisory_xact_lock(hashtext(:user_id))"), {"user_id": user_id})
+
     today = date.today()
     posted = 0
 

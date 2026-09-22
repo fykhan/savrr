@@ -1,3 +1,4 @@
+import asyncio
 from datetime import date, timedelta
 
 
@@ -92,3 +93,40 @@ async def test_sync_is_scoped_to_caller_only(make_auth_client):
 
     resp = await client_b.post("/sync")
     assert resp.json()["posted"] == 0
+
+
+async def test_concurrent_sync_calls_do_not_double_post(auth_client):
+    """Reproduces the /sync race: two concurrent POST /sync calls for the
+    same user, one due income record. Before the per-user advisory lock in
+    apply_due_transactions, both requests could read next_date under READ
+    COMMITTED before either committed, and both post -- 2 transactions for
+    1 due record, with both responses claiming posted: 1. The ground truth
+    is the persisted transaction count, not the two responses' posted
+    fields (a buggy implementation could still coincidentally report totals
+    that look right), so that's what's asserted here."""
+    account_id = await _make_account(auth_client)
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    await auth_client.post(
+        "/income",
+        json={"source": "Job", "amount": "1000.00", "frequency": "monthly",
+              "accountId": account_id, "nextDate": yesterday},
+    )
+
+    resp_a, resp_b = await asyncio.gather(
+        auth_client.post("/sync"),
+        auth_client.post("/sync"),
+    )
+
+    assert resp_a.status_code == 200
+    assert resp_b.status_code == 200
+
+    # the advisory lock serializes the two calls -- whichever actually runs
+    # second sees next_date already advanced past today and posts nothing
+    posted_values = sorted([resp_a.json()["posted"], resp_b.json()["posted"]])
+    assert posted_values == [0, 1]
+
+    # ground truth: exactly one transaction actually persisted, regardless
+    # of what the two responses claimed -- this is what the original race
+    # violated (it left 2 transactions for 1 due record)
+    txns = (await auth_client.get("/transactions")).json()
+    assert len(txns) == 1

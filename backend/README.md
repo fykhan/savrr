@@ -227,8 +227,13 @@ background job; the client drives it.
 ```
 
 `posted` is the total number of transactions written across all four recurring tables for the
-caller. Idempotent to call repeatedly in the same moment — a row with nothing newly due posts
-nothing.
+caller. Idempotent when called sequentially — a row with nothing newly due posts nothing. It's also
+safe under *concurrent* calls from the same user: `apply_due_transactions` (`backend/recurring.py`)
+takes a per-user Postgres advisory transaction lock (`pg_advisory_xact_lock(hashtext(user_id))`)
+before reading anything, so two `POST /sync` requests racing for the same user are serialized —
+whichever runs second sees the first's already-advanced `next_date`/`next_due_date` and posts
+nothing, instead of both reading the pre-update state and double-posting. Different users' calls
+use different lock keys and never block each other.
 
 ## Error Handling
 
@@ -245,8 +250,10 @@ All errors return JSON with `detail` (a string, or a list of Pydantic error obje
 | `422` | Pydantic validation error, or check-constraint violation (sqlstate `23514`) forwarded from Postgres | Invalid `type` on a transaction, missing required field, empty `PATCH` body |
 | `500` | Server error (rare) | Database connection failure |
 
-These mappings are centralized in `backend/app.py`'s `IntegrityError` handler (409/422/403 by
-sqlstate) plus each route's own `HTTPException`s (404/422 for not-found/empty-patch).
+These mappings are centralized in `backend/app.py`'s `DBAPIError` handler (409/422/403 by sqlstate
+-- registered on `DBAPIError` rather than `IntegrityError` so it also catches the `ProgrammingError`
+that an RLS rejection surfaces as) plus each route's own `HTTPException`s (404/422 for
+not-found/empty-patch).
 
 ## Tenancy & RLS
 
