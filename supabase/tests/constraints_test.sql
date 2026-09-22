@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(26);
+select plan(31);
 
 -- enums (task 2)
 select enum_has_labels('public', 'frequency',
@@ -52,6 +52,14 @@ select throws_ok(
      values ('00000000-0000-0000-0000-00000000000a', 'expense', 'Mine'),
             ('00000000-0000-0000-0000-00000000000a', 'expense', 'Mine') $$,
   '23505', null, 'duplicate (user, kind, name) category is rejected');
+
+-- seeded system categories (task 7)
+select is(count(*)::int, 12, '11 system expense categories + Dup') from categories where user_id is null and kind = 'expense';
+select is(count(*)::int, 11, '11 system budget categories')      from categories where user_id is null and kind = 'budget';
+select is(count(*)::int, 15, '15 system transaction categories') from categories where user_id is null and kind = 'transaction';
+select is(count(*)::int, 7,  '7 system subscription categories') from categories where user_id is null and kind = 'subscription';
+select ok(exists (select 1 from categories where user_id is null and kind = 'transaction' and name = 'Adjustment'),
+  'transaction categories include Adjustment');
 
 select * from finish();
 rollback;

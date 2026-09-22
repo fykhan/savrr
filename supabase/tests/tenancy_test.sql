@@ -62,7 +62,8 @@ select is(count(*)::int, 1, 'A sees only own installments')  from installments;
 select is(count(*)::int, 1, 'A sees only own savings')       from savings;
 select is(count(*)::int, 1, 'A sees only own budgets')       from budgets;
 select is(count(*)::int, 1, 'A sees only own debts')         from debts;
-select is(count(*)::int, 2, 'A sees system + own categories') from categories;
+select is(count(*)::int, 2, 'A sees system + own marker categories')
+  from categories where name in ('SysCat', 'A cat', 'B cat');
 select is(count(*)::int, 0, 'A sees none of B''s rows')      from accounts where user_id = '00000000-0000-0000-0000-00000000000b';
 
 -- A cannot update or delete B's rows (they are invisible, so 0 rows affected)
@@ -97,7 +98,8 @@ select is(count(*)::int, 1, 'system category survives A''s update/delete') from 
 select set_config('request.jwt.claims', '{"role":"anon"}', true);
 set local role anon;
 select is(count(*)::int, 0, 'anon sees no accounts') from accounts;
-select is(count(*)::int, 1, 'anon sees system categories only') from categories;
+select is(count(*)::int, 1, 'anon sees SysCat but not user categories')
+  from categories where name in ('SysCat', 'A cat', 'B cat');
 reset role;
 
 select * from finish();
