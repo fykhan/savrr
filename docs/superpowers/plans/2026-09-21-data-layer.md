@@ -6,7 +6,7 @@
 
 **Architecture:** Plain SQL migrations under `supabase/migrations/`, applied forward-only with `supabase db push --linked`. There is no local Docker stack — every push and every test run targets the hosted dev project. pgTAP tests under `supabase/tests/` each run inside `begin … rollback`, so they never leave rows behind. Tenancy is enforced by RLS policies on `user_id = (select auth.uid())`; tests impersonate users by `set local role authenticated` + `request.jwt.claims`.
 
-**Tech Stack:** Supabase (Postgres 17, Auth), Supabase CLI 2.117.0 at `~/.supabase/bin`, pgTAP.
+**Tech Stack:** Supabase (Postgres 17, Auth), Supabase CLI 2.117.0 at `~/.supabase/bin`, pgTAP run via `scripts/pgtap.py` (psycopg in `.venv`) because `supabase test db` needs Docker, which this machine lacks.
 
 **Spec:** `docs/superpowers/specs/2026-09-21-data-layer-design.md`
 
@@ -30,8 +30,9 @@ set -a; source .env; set +a
 
 supabase db push --linked                     # apply pending migrations
 supabase migration list --linked              # what's applied locally vs remote
-supabase test db --linked                     # run every file in supabase/tests/
-supabase test db --linked supabase/tests/tenancy_test.sql   # one file
+.venv/bin/python scripts/pgtap.py                                 # run every *_test.sql in supabase/tests/
+.venv/bin/python scripts/pgtap.py supabase/tests/tenancy_test.sql  # one file
+# (not `.venv/bin/python scripts/pgtap.py` — that runs pg_prove in Docker)
 ```
 
 ### pgTAP test file shape
@@ -69,9 +70,9 @@ reset role;   -- back to postgres for setup/teardown
 - Create: `.env` (gitignored — never committed)
 
 **Interfaces:**
-- Produces: a working `supabase db push --linked` / `supabase test db --linked` invocation that every later task depends on.
+- Produces: a working `supabase db push --linked` / `.venv/bin/python scripts/pgtap.py` invocation that every later task depends on.
 
-- [ ] **Step 1: Add the DB password variable to `.env.example`**
+- [x] **Step 1: Add the DB password variable to `.env.example`**
 
 ```
 SUPABASE_URL=https://myafgbejcqvitbosfcag.supabase.co
@@ -80,11 +81,11 @@ SUPABASE_SERVICE_ROLE_KEY=
 SUPABASE_DB_PASSWORD=
 ```
 
-- [ ] **Step 2: Author creates `.env`**
+- [x] **Step 2: Author creates `.env`**
 
 `cp .env.example .env` and fill in `SUPABASE_DB_PASSWORD` (Dashboard → Project Settings → Database → reset if lost) and the two keys (Project Settings → API). This step is the author's; an agent must ask, never guess.
 
-- [ ] **Step 3: Verify connectivity**
+- [x] **Step 3: Verify connectivity**
 
 Run:
 ```bash
@@ -93,7 +94,7 @@ supabase migration list --linked
 ```
 Expected: a table with empty Local and Remote columns (no migrations yet), no password prompt, no auth error.
 
-- [ ] **Step 4: Verify pgTAP works on the hosted project**
+- [x] **Step 4: Verify pgTAP works on the hosted project**
 
 Create a throwaway `supabase/tests/sanity_test.sql`:
 
@@ -106,12 +107,12 @@ select * from finish();
 rollback;
 ```
 
-Run: `supabase test db --linked`
+Run: `.venv/bin/python scripts/pgtap.py`
 Expected: `sanity_test.sql .. ok` and `All tests successful.`
 
 Then delete it: `rm supabase/tests/sanity_test.sql`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add .env.example
@@ -154,7 +155,7 @@ rollback;
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `supabase test db --linked supabase/tests/constraints_test.sql`
+Run: `.venv/bin/python scripts/pgtap.py supabase/tests/constraints_test.sql`
 Expected: 8 failures, each `Enum public.<name> should have labels …` / type does not exist.
 
 - [ ] **Step 3: Write the migration**
@@ -178,7 +179,7 @@ create type category_kind  as enum ('expense','subscription','transaction','budg
 Run:
 ```bash
 supabase db push --linked
-supabase test db --linked supabase/tests/constraints_test.sql
+.venv/bin/python scripts/pgtap.py supabase/tests/constraints_test.sql
 ```
 Expected: push lists `0001_enums.sql` and applies it; test prints `ok 1` … `ok 8`, `All tests successful.`
 
@@ -269,7 +270,7 @@ Assertion count: 8 enums + 11 tables + 2 col types + 3 constraint + 1 lives_ok =
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `supabase test db --linked supabase/tests/constraints_test.sql`
+Run: `.venv/bin/python scripts/pgtap.py supabase/tests/constraints_test.sql`
 Expected: tests 9–25 fail (tables don't exist; the insert into `accounts` errors with `42P01` not `22P02`).
 
 - [ ] **Step 3: Write the migration**
@@ -433,7 +434,7 @@ create index categories_user_id_idx on categories (user_id);
 Run:
 ```bash
 supabase db push --linked
-supabase test db --linked supabase/tests/constraints_test.sql
+.venv/bin/python scripts/pgtap.py supabase/tests/constraints_test.sql
 ```
 Expected: `0002_tables.sql` applied; `ok 1` … `ok 25`, `All tests successful.`
 
@@ -514,7 +515,7 @@ rollback;
 
 - [ ] **Step 2: Run the test**
 
-Run: `supabase test db --linked supabase/tests/cascades_test.sql`
+Run: `.venv/bin/python scripts/pgtap.py supabase/tests/cascades_test.sql`
 Expected: `ok 1` … `ok 10`, `All tests successful.` (If it fails, the FK `on delete` clauses in `0002_tables.sql` are wrong — fix with a new migration `0006_…`, never by editing 0002.)
 
 - [ ] **Step 3: Commit**
@@ -648,7 +649,7 @@ Assertion count: 11 rls flags + 12 visibility + 3 update/delete + 2 throws + 1 s
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `supabase test db --linked supabase/tests/tenancy_test.sql`
+Run: `.venv/bin/python scripts/pgtap.py supabase/tests/tenancy_test.sql`
 Expected: the 11 `rls enabled on …` assertions fail (`relrowsecurity` is false), and the visibility assertions fail with counts of 2 instead of 1.
 
 - [ ] **Step 3: Write the migration**
@@ -741,7 +742,7 @@ create policy "delete own" on categories
 Run:
 ```bash
 supabase db push --linked
-supabase test db --linked
+.venv/bin/python scripts/pgtap.py
 ```
 Expected: `0003_rls.sql` applied; all three files pass. (`cascades_test` and `constraints_test` run as `postgres`, which bypasses RLS, so they are unaffected.)
 
@@ -787,7 +788,7 @@ and change `select plan(32);` to `select plan(34);`. Also update the comment `--
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `supabase test db --linked supabase/tests/tenancy_test.sql`
+Run: `.venv/bin/python scripts/pgtap.py supabase/tests/tenancy_test.sql`
 Expected: `signup trigger created a profile…` fails with 0, `A sees only own profile` fails with 0.
 
 - [ ] **Step 3: Write the migration**
@@ -816,7 +817,7 @@ create trigger on_auth_user_created
 Run:
 ```bash
 supabase db push --linked
-supabase test db --linked
+.venv/bin/python scripts/pgtap.py
 ```
 Expected: `0004_new_user_trigger.sql` applied; all three files pass (tenancy now `1..34`).
 
@@ -858,7 +859,7 @@ and change `select plan(25);` to `select plan(30);`.
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `supabase test db --linked supabase/tests/constraints_test.sql`
+Run: `.venv/bin/python scripts/pgtap.py supabase/tests/constraints_test.sql`
 Expected: the five new assertions fail with counts of 0 (the earlier `Dup` insert in the same file is kind `expense` — so the expense count fails with 1, not 0; that's fine).
 
 - [ ] **Step 3: Write the migration**
@@ -892,7 +893,7 @@ from unnest(array['Entertainment','Software','Health','News','Music','Cloud','Ot
 Run:
 ```bash
 supabase db push --linked
-supabase test db --linked
+.venv/bin/python scripts/pgtap.py
 ```
 Expected: `0005_seed_categories.sql` applied; all three files pass. `supabase migration list --linked` shows all five on both sides.
 
@@ -964,7 +965,7 @@ Replace the `## Status as of 2026-09-21` section body with:
 ```markdown
 **Sub-project 1 (data layer) is implemented and applied to `savrr-dev`.** Five migrations in
 `supabase/migrations/`, three pgTAP files in `supabase/tests/`, all passing via
-`supabase test db --linked`. Next: sub-project 2 (FastAPI backend) — brainstorm → spec → plan.
+`.venv/bin/python scripts/pgtap.py`. Next: sub-project 2 (FastAPI backend) — brainstorm → spec → plan.
 ```
 
 Replace the `## Planned layout` section with:
@@ -989,7 +990,7 @@ hosted dev DB inside `begin … rollback`, so they leave nothing behind. To exer
 - [ ] **Step 5: Run everything one last time and commit**
 
 ```bash
-supabase test db --linked
+.venv/bin/python scripts/pgtap.py
 git add README.md CLAUDE.md
 git commit -m "readme + claude.md for data layer"
 ```
