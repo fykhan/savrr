@@ -18,20 +18,25 @@ speech.
 Target architecture: **Supabase** (Postgres + Auth) → **FastAPI** backend with AI via **OpenRouter**
 → **React Native** client (iOS-primary, Android optional).
 
-## Status as of 2026-09-22
+## Status as of 2026-09-23
 
-**Sub-project 1 shipped.** Schema, RLS, signup trigger and seed categories are live on
-`savrr-dev`. Sub-project 2 (FastAPI backend) has not started.
+**Sub-projects 1 and 2 shipped.** Schema, RLS, signup trigger and seed categories are live on
+`savrr-dev` (sub-project 1). `backend/` now has full CRUD for all eight collections, filtered
+transactions, categories (system defaults + user's own), profile, and recurring catch-up
+(`POST /sync`), all authenticated via Supabase JWTs and RLS-scoped per request (sub-project 2).
+Start at `backend/README.md`. Next: sub-project 3 (AI/voice) or sub-project 4 (React Native) —
+brainstorm → spec → plan.
 
 ## How the work is decomposed
 
 The project is too large for one spec, so it is split into four sub-projects, each getting its own
 design → spec → plan → implementation cycle. The order is dependency-driven:
 
-1. **Data layer & Supabase foundation** ← *current*. Schema, RLS, auth, migrations, pgTAP tests.
+1. **Data layer & Supabase foundation** ← done. Schema, RLS, auth, migrations, pgTAP tests.
    Design spec: `docs/superpowers/specs/2026-09-21-data-layer-design.md`
-2. **FastAPI backend** — CRUD, recurring/auto-pay catch-up, statements, categorization
-3. **AI & voice layer** — OpenRouter, natural-language transaction logging
+2. **FastAPI backend** ← done. CRUD, recurring/auto-pay catch-up, statements, categorization.
+   Design spec: `docs/superpowers/specs/2026-09-22-backend-design.md`; start at `backend/README.md`
+3. **AI & voice layer** ← *next up*. OpenRouter, natural-language transaction logging
 4. **React Native client** — accounts, transaction log, recurring setup, custom statements, voice UI
 
 Nothing can be built or verified until the schema exists; the client is built last against a stable API.
@@ -110,11 +115,12 @@ Migrations are forward-only: once pushed, never edit one — add `0006_…`. Tes
 hosted dev DB inside `begin … rollback`, so they leave nothing behind. To exercise RLS in a test,
 `set local role authenticated` after setting `request.jwt.claims` — the `postgres` role bypasses RLS.
 
-## Status of setup (2026-09-22)
+## Status of setup (2026-09-23)
 
 **Sub-project 1 (data layer) is implemented and applied to `savrr-dev`.** Five migrations in
-`supabase/migrations/`, three pgTAP files in `supabase/tests/`, all passing. Next: sub-project 2
-(FastAPI backend) — brainstorm → spec → plan.
+`supabase/migrations/`, three pgTAP files in `supabase/tests/`, all passing. **Sub-project 2
+(FastAPI backend) is also implemented** — see `backend/README.md` for setup, endpoints, and testing.
+Next: sub-project 3 (AI/voice) or sub-project 4 (React Native) — brainstorm → spec → plan.
 
 - Supabase CLI installed at `~/.supabase/bin/supabase` (via the official install script — the npm
   global package is deprecated and doesn't produce a working binary). `~/.bashrc` adds it to PATH;
