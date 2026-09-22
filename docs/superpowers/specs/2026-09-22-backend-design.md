@@ -146,10 +146,15 @@ collection) plus three purpose-built routers:
 | `GET /profile`, `PATCH /profile` | the caller's own `profiles` row |
 | `POST /sync` | runs `recurring.apply_due_transactions`; returns `{"posted": <count>}` |
 
-Every collection's `*In`/`*Out`/`*Patch` schema pattern (camelCase surface,
-`Literal`-constrained enum fields on write, widened to `str` on read) is
-ported directly from financial-manager's `schemas.py` — same reasoning:
-rows written before a constraint existed must still round-trip on read.
+Every collection's `*In`/`*Out`/`*Patch` schema pattern (camelCase surface via
+`CamelModel`) is ported from financial-manager's `schemas.py`, with one
+deliberate improvement: enum fields stay `Literal`-constrained on **both**
+read and write. financial-manager widens its `*Out` models to plain `str`
+because rows written before Pydantic's constraint existed must still
+round-trip — that legacy problem doesn't exist here, since Postgres enforces
+the vocabulary at the column level from the first migration onward. Keeping
+`Literal` on read too gives a stronger OpenAPI schema (and, per the
+data-layer spec, a real TypeScript union type for the RN client).
 
 ## Ported logic
 
