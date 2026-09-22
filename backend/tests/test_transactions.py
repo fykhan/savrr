@@ -93,3 +93,34 @@ async def test_cannot_see_another_users_transactions(make_auth_client):
     )
     resp = await client_b.get("/transactions")
     assert resp.json() == []
+
+
+async def test_filter_by_invalid_type_is_422(auth_client):
+    resp = await auth_client.get("/transactions", params={"type": "bogus"})
+    assert resp.status_code == 422
+
+
+async def test_cannot_get_patch_or_delete_another_users_transaction_by_id(make_auth_client):
+    _, client_a = await make_auth_client()
+    _, client_b = await make_auth_client()
+    account_id = await _make_account(client_a)
+    created = await client_a.post(
+        "/transactions",
+        json={
+            "date": "2026-01-01", "description": "x", "amount": "1.00",
+            "type": "expense", "category": "Food", "accountId": account_id,
+        },
+    )
+    assert created.status_code == 201, created.text
+    txn_id = created.json()["id"]
+
+    # B can't fetch, patch, or delete A's transaction by id -- RLS makes it
+    # invisible, so it looks identical to "doesn't exist"
+    assert (await client_b.get(f"/transactions/{txn_id}")).status_code == 404
+    assert (await client_b.patch(f"/transactions/{txn_id}", json={"description": "hacked"})).status_code == 404
+    assert (await client_b.delete(f"/transactions/{txn_id}")).status_code == 404
+
+    # A's transaction is untouched
+    still_there = await client_a.get(f"/transactions/{txn_id}")
+    assert still_there.status_code == 200
+    assert still_there.json()["description"] == "x"

@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from backend.auth import get_current_user
 from backend.db import get_db_conn
 from backend.models import transactions
-from backend.schemas import TransactionIn, TransactionOut, TransactionPatch, validate_body
+from backend.schemas import TransactionIn, TransactionOut, TransactionPatch, TxnType, validate_body
 
 router = APIRouter()
 
@@ -19,7 +19,7 @@ async def list_transactions(
     end: date_type | None = None,
     category: str | None = None,
     keyword: str | None = None,
-    type: str | None = None,
+    type: TxnType | None = None,
     account_id: UUID | None = None,
     conn: AsyncConnection = Depends(get_db_conn),
 ):
