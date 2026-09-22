@@ -181,6 +181,22 @@ class TransactionOut(CamelModel):
     created_at: datetime
 
 
+CategoryKind = Literal["expense", "subscription", "transaction", "budget"]
+
+
+class CategoryIn(CamelModel):
+    kind: CategoryKind
+    name: str
+
+
+class CategoryOut(CamelModel):
+    id: UUID
+    user_id: UUID | None
+    kind: CategoryKind
+    name: str
+    created_at: datetime
+
+
 class TransactionPatch(CamelModel):
     date: date_type | None = None
     description: str | None = None

@@ -24,6 +24,9 @@ txn_type_enum = PGEnum(
 )
 debt_txn_dir_enum = PGEnum("increase", "decrease", name="debt_txn_dir", create_type=False)
 saving_txn_dir_enum = PGEnum("contribute", "withdraw", name="saving_txn_dir", create_type=False)
+category_kind_enum = PGEnum(
+    "expense", "subscription", "transaction", "budget", name="category_kind", create_type=False
+)
 
 profiles = sa.Table(
     "profiles",
@@ -154,6 +157,15 @@ transactions = sa.Table(
     sa.Column("saving_id", PGUUID(as_uuid=True)),
     sa.Column("saving_direction", saving_txn_dir_enum),
     sa.Column("notes", sa.String, nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+categories = sa.Table(
+    "categories", metadata,
+    sa.Column("id", PGUUID(as_uuid=True), primary_key=True),
+    sa.Column("user_id", PGUUID(as_uuid=True)),
+    sa.Column("kind", category_kind_enum, nullable=False),
+    sa.Column("name", sa.String, nullable=False),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
 )
 

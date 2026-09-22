@@ -68,7 +68,6 @@ async def test_installments_rejects_zero_term(auth_client):
     assert resp.status_code == 422
 
 
-@pytest.mark.skip(reason="categories route added in a later task")
 async def test_duplicate_own_category_name_conflicts(auth_client):
     # exercised here rather than in test_categories.py's own task because
     # this proves the IntegrityError -> 409 mapping this task adds
