@@ -19,6 +19,14 @@ account_type_enum = PGEnum(
 )
 income_type_enum = PGEnum("net", "gross", name="income_type", create_type=False)
 debt_direction_enum = PGEnum("owed_to_me", "owed_by_me", name="debt_direction", create_type=False)
+txn_type_enum = PGEnum(
+    "expense", "income", "transfer", "debt", "savings", name="txn_type", create_type=False
+)
+debt_txn_dir_enum = PGEnum("increase", "decrease", name="debt_txn_dir", create_type=False)
+saving_txn_dir_enum = PGEnum("contribute", "withdraw", name="saving_txn_dir", create_type=False)
+category_kind_enum = PGEnum(
+    "expense", "subscription", "transaction", "budget", name="category_kind", create_type=False
+)
 
 profiles = sa.Table(
     "profiles",
@@ -130,6 +138,34 @@ budgets = sa.Table(
     sa.Column("category", sa.String, nullable=False),
     sa.Column("monthly_limit", sa.Numeric(14, 2), nullable=False),
     sa.Column("notes", sa.String, nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+transactions = sa.Table(
+    "transactions", metadata,
+    sa.Column("id", PGUUID(as_uuid=True), primary_key=True),
+    sa.Column("user_id", PGUUID(as_uuid=True), nullable=False),
+    sa.Column("date", sa.Date, nullable=False),
+    sa.Column("description", sa.String, nullable=False),
+    sa.Column("amount", sa.Numeric(14, 2), nullable=False),
+    sa.Column("type", txn_type_enum, nullable=False),
+    sa.Column("category", sa.String, nullable=False),
+    sa.Column("account_id", PGUUID(as_uuid=True)),
+    sa.Column("to_account_id", PGUUID(as_uuid=True)),
+    sa.Column("debt_id", PGUUID(as_uuid=True)),
+    sa.Column("debt_direction", debt_txn_dir_enum),
+    sa.Column("saving_id", PGUUID(as_uuid=True)),
+    sa.Column("saving_direction", saving_txn_dir_enum),
+    sa.Column("notes", sa.String, nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+categories = sa.Table(
+    "categories", metadata,
+    sa.Column("id", PGUUID(as_uuid=True), primary_key=True),
+    sa.Column("user_id", PGUUID(as_uuid=True)),
+    sa.Column("kind", category_kind_enum, nullable=False),
+    sa.Column("name", sa.String, nullable=False),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
 )
 

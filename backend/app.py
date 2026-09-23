@@ -1,12 +1,15 @@
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError
 
-from backend.routes import collections, profiles
+from backend.routes import categories, collections, profiles, sync, transactions
 
 app = FastAPI(title="savrr")
 
 app.include_router(profiles.router)
+app.include_router(transactions.router)
+app.include_router(categories.router)
+app.include_router(sync.router)
 
 
 # Registered before collections.router (see note below): collections.router's
@@ -22,8 +25,16 @@ async def health():
 app.include_router(collections.router)
 
 
-@app.exception_handler(IntegrityError)
-async def integrity_error_handler(request, exc: IntegrityError):
+# Registered on DBAPIError, not IntegrityError: IntegrityError only covers
+# 23505/23514-style constraint violations. An RLS write rejection (42501,
+# insufficient_privilege) surfaces from psycopg as InsufficientPrivilege,
+# which SQLAlchemy classifies as a ProgrammingError -- a sibling of
+# IntegrityError, not a subclass of it. DBAPIError is the common base for
+# both, so it's the only registration that actually sees a 42501. Unknown
+# sqlstates (and non-DB-error DBAPIErrors) re-raise and fall through to the
+# default 500 handler, same as before.
+@app.exception_handler(DBAPIError)
+async def db_error_handler(request, exc: DBAPIError):
     sqlstate = getattr(getattr(exc, "orig", None), "sqlstate", None)
     if sqlstate == "23505":  # unique_violation
         return JSONResponse(status_code=409, content={"detail": "conflict"})
